@@ -94,11 +94,136 @@ function createUsageChart(usageData) {
     });
 }
 
+async function fetchMetrics() {
+    try {
+        const [enterpriseMetrics, orgMetrics] = await Promise.all([
+            fetch('/api/copilot/metrics/enterprise').then(res => res.json()),
+            fetch('/api/copilot/metrics/org').then(res => res.json())
+        ]);
+        
+        displayMetrics(enterpriseMetrics, orgMetrics);
+    } catch (error) {
+        console.error('Error fetching metrics:', error);
+    }
+}
+
+function displayMetrics(enterpriseMetrics, orgMetrics) {
+    const metricsContainer = document.getElementById('metrics-container');
+    if (!metricsContainer) {
+        const container = document.createElement('div');
+        container.id = 'metrics-container';
+        container.className = 'mt-8 grid grid-cols-1 md:grid-cols-2 gap-6';
+        document.querySelector('main').appendChild(container);
+    }
+
+    // Display enterprise metrics
+    if (enterpriseMetrics && enterpriseMetrics.length > 0) {
+        const latestMetrics = enterpriseMetrics[0];
+        displayMetricsSection('Enterprise Metrics', latestMetrics);
+    }
+
+    // Display org metrics
+    if (orgMetrics && orgMetrics.length > 0) {
+        const latestMetrics = orgMetrics[0];
+        displayMetricsSection('Organization Metrics', latestMetrics);
+    }
+}
+
+function displayMetricsSection(title, metrics) {
+    const container = document.getElementById('metrics-container');
+    const section = document.createElement('div');
+    section.className = 'bg-white p-6 rounded-lg shadow-lg';
+    
+    section.innerHTML = `
+        <h2 class="text-2xl font-bold mb-4">${title}</h2>
+        <div class="space-y-6">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gray-50 p-4 rounded">
+                    <h3 class="font-semibold">Active Users</h3>
+                    <p class="text-2xl">${metrics.total_active_users}</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded">
+                    <h3 class="font-semibold">Engaged Users</h3>
+                    <p class="text-2xl">${metrics.total_engaged_users}</p>
+                </div>
+            </div>
+            
+            ${createIDEMetricsHTML(metrics.copilot_ide_code_completions)}
+            ${createChatMetricsHTML(metrics.copilot_ide_chat, metrics.copilot_dotcom_chat)}
+            ${createPRMetricsHTML(metrics.copilot_dotcom_pull_requests)}
+        </div>
+    `;
+    
+    container.appendChild(section);
+}
+
+function createIDEMetricsHTML(ideMetrics) {
+    if (!ideMetrics) return '';
+    
+    const languageStats = ideMetrics.languages.map(lang => `
+        <div class="bg-blue-50 p-3 rounded">
+            <h4 class="font-medium">${lang.name}</h4>
+            <p>${lang.total_engaged_users} users</p>
+        </div>
+    `).join('');
+
+    return `
+        <div class="mt-6">
+            <h3 class="text-xl font-semibold mb-3">IDE Completions</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                ${languageStats}
+            </div>
+        </div>
+    `;
+}
+
+function createChatMetricsHTML(ideChat, dotcomChat) {
+    if (!ideChat && !dotcomChat) return '';
+    
+    return `
+        <div class="mt-6">
+            <h3 class="text-xl font-semibold mb-3">Chat Usage</h3>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-green-50 p-4 rounded">
+                    <h4 class="font-medium">IDE Chat</h4>
+                    <p>${ideChat?.total_engaged_users || 0} users</p>
+                </div>
+                <div class="bg-green-50 p-4 rounded">
+                    <h4 class="font-medium">GitHub.com Chat</h4>
+                    <p>${dotcomChat?.total_engaged_users || 0} users</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function createPRMetricsHTML(prMetrics) {
+    if (!prMetrics) return '';
+    
+    const repoStats = prMetrics.repositories.map(repo => `
+        <div class="bg-purple-50 p-3 rounded">
+            <h4 class="font-medium">${repo.name}</h4>
+            <p>${repo.total_engaged_users} users</p>
+            <p>${repo.models[0]?.total_pr_summaries_created || 0} PR summaries</p>
+        </div>
+    `).join('');
+
+    return `
+        <div class="mt-6">
+            <h3 class="text-xl font-semibold mb-3">Pull Request Activity</h3>
+            <div class="grid grid-cols-2 gap-3">
+                ${repoStats}
+            </div>
+        </div>
+    `;
+}
+
 async function initialize() {
     const usageData = await fetchData('/api/enterprise/usage');
 
     displayUsageInfo(usageData);
     createUsageChart(usageData);
+    fetchMetrics();
 }
 
 initialize();
