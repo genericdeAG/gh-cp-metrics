@@ -94,17 +94,38 @@ function createUsageChart(usageData) {
     });
 }
 
+let selectedOrg = '';
+async function loadOrganizations() {
+    const orgs = await fetchData('/api/organizations');
+    if (!orgs) return;
+
+    const selector = document.getElementById('org-selector');
+    orgs.forEach(org => {
+        const option = document.createElement('option');
+        option.value = org.login;
+        option.textContent = org.name;
+        selector.appendChild(option);
+    });
+
+    // Select the first organization by default
+    if (orgs.length > 0) {
+        selector.value = orgs[0].login;
+        selectedOrg = orgs[0].login;
+        fetchMetrics();
+    }
+}
+
 async function fetchMetrics() {
     try {
         // Always fetch org metrics
-        const orgMetrics = await fetch('/api/copilot/metrics/org').then(res => res.json());
+        const orgMetrics = await fetch(`/api/copilot/metrics/org?org=${selectedOrg}`).then(res => res.json());
         
         // Conditionally fetch enterprise metrics based on toggle state
         const showEnterprise = document.getElementById('enterprise-toggle').getAttribute('aria-checked') === 'true';
         let enterpriseMetrics = null;
         
         if (showEnterprise) {
-            enterpriseMetrics = await fetch('/api/copilot/metrics/enterprise').then(res => res.json());
+            enterpriseMetrics = await fetch(`/api/copilot/metrics/enterprise`).then(res => res.json());
         }
         
         const mainElement = document.querySelector('main');
@@ -312,6 +333,15 @@ function createTimeSeriesChart(canvasId, metricsData, title) {
 }
 
 function initialize() {
+    loadOrganizations();
+    
+    // Add event listener for organization selection
+    const orgSelector = document.getElementById('org-selector');
+    orgSelector.addEventListener('change', (e) => {
+        selectedOrg = e.target.value;
+        fetchMetrics();
+    });
+
     // Add event listener for the enterprise toggle
     const toggle = document.getElementById('enterprise-toggle');
     let isChecked = false;

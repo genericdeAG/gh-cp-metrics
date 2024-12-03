@@ -16,48 +16,25 @@ const octokit = new Octokit({
 
 app.use(express.static('public'));
 
-app.get('/api/org-info', async (req, res) => {
+
+app.get('/api/organizations', async (req, res) => {
     try {
-        // List all organizations the user has access to
-        const orgsResponse = await octokit.request('GET /user/orgs', {
+        const response = await octokit.request('GET /user/orgs', {
             headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
             }
         });
 
-        console.log('Available Organizations:', orgsResponse.data.map(org => ({
+        const orgs = response.data.map(org => ({
             login: org.login,
-            id: org.id,
-            url: org.url
-        })));
+            name: org.name || org.login,
+            id: org.id
+        }));
 
-        // Try to get specific org details
-        const orgDetails = await Promise.all([
-            octokit.request('GET /orgs/{org}', {
-                org: process.env.ORG_NAME_1,
-                headers: { 'X-GitHub-Api-Version': '2022-11-28' }
-            }),
-            octokit.request('GET /orgs/{org}', {
-                org: process.env.ORG_NAME_2,
-                headers: { 'X-GitHub-Api-Version': '2022-11-28' }
-            })
-        ].map(p => p.catch(e => ({ error: e.message }))));
-
-        console.log('Organization Details:', {
-            org1: orgDetails[0],
-            org2: orgDetails[1]
-        });
-
-        res.json({
-            userOrgs: orgsResponse.data,
-            orgDetails
-        });
+        res.json(orgs);
     } catch (error) {
-        console.error('Organization Info Error:', {
-            response: error.response?.data,
-            status: error.response?.status || error.status || 'Unknown'
-        });
-        res.status(500).json({ error: error.message });
+        console.error('Error fetching organizations:', error);
+        res.status(500).json({ error: 'Failed to fetch organizations' });
     }
 });
 
@@ -125,12 +102,16 @@ app.get('/api/copilot/metrics/enterprise', async (req, res) => {
 
 app.get('/api/copilot/metrics/org', async (req, res) => {
     try {
+        const selectedOrg = req.query.org || process.env.ORG_NAME_1; // Use query param or fallback to default
+        console.log(`Fetching metrics for organization: ${selectedOrg}`);
+
         const response = await octokit.request('GET /orgs/{org}/copilot/metrics', {
-            org: process.env.ORG_NAME_2,
+            org: selectedOrg,
             headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
             }
         });
+        
         res.json(response.data);
     } catch (error) {
         // console.error('Organization Metrics Error:', error);
