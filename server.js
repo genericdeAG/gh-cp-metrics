@@ -99,30 +99,41 @@ app.get('/api/enterprise/usage', async (req, res) => {
 
 app.get('/api/copilot/metrics/enterprise', async (req, res) => {
     try {
+        console.log(`Fetching metrics for enterprise: ${process.env.ENTERPRISE_NAME}`);
+
         const response = await octokit.request('GET /enterprises/{enterprise}/copilot/metrics', {
             enterprise: process.env.ENTERPRISE_NAME,
             headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
             }
         });
+        
         res.json(response.data);
     } catch (error) {
-        console.error('Enterprise Metrics Error:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Enterprise Metrics Error:', {
+            message: error.message,
+            status: error.status,
+            response: error.response?.data
+        });
+        res.status(500).json({ 
+            error: error.message,
+            enterprise: process.env.ENTERPRISE_NAME,
+            documentation_url: 'https://docs.github.com/rest/copilot/copilot-business#get-copilot-metrics-for-an-enterprise'
+        });
     }
 });
 
 app.get('/api/copilot/metrics/org', async (req, res) => {
     try {
         const response = await octokit.request('GET /orgs/{org}/copilot/metrics', {
-            org: process.env.ORG_NAME_1,
+            org: process.env.ORG_NAME_2,
             headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
             }
         });
         res.json(response.data);
     } catch (error) {
-        console.error('Organization Metrics Error:', error);
+        // console.error('Organization Metrics Error:', error);
         res.status(500).json({ error: error.message });
     }
 });

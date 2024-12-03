@@ -96,133 +96,249 @@ function createUsageChart(usageData) {
 
 async function fetchMetrics() {
     try {
-        const [enterpriseMetrics, orgMetrics] = await Promise.all([
-            fetch('/api/copilot/metrics/enterprise').then(res => res.json()),
-            fetch('/api/copilot/metrics/org').then(res => res.json())
-        ]);
+        // Always fetch org metrics
+        const orgMetrics = await fetch('/api/copilot/metrics/org').then(res => res.json());
         
-        displayMetrics(enterpriseMetrics, orgMetrics);
+        // Conditionally fetch enterprise metrics based on toggle state
+        const showEnterprise = document.getElementById('enterprise-toggle').getAttribute('aria-checked') === 'true';
+        let enterpriseMetrics = null;
+        
+        if (showEnterprise) {
+            enterpriseMetrics = await fetch('/api/copilot/metrics/enterprise').then(res => res.json());
+        }
+        
+        const mainElement = document.querySelector('main');
+        if (!mainElement) {
+            throw new Error('Main element not found in the document');
+        }
+
+        // Clear previous metrics
+        let container = document.getElementById('metrics-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'metrics-container';
+            container.className = 'mt-8 space-y-8';
+            mainElement.appendChild(container);
+        }
+        container.innerHTML = '';
+        
+        // Create sections based on toggle state
+        if (showEnterprise && enterpriseMetrics) {
+            const enterpriseSection = createSection('Enterprise Metrics', enterpriseMetrics);
+            container.appendChild(enterpriseSection);
+        }
+        
+        const orgSection = createSection('Organization Metrics', orgMetrics);
+        container.appendChild(orgSection);
+
+        // Create charts
+        createCharts(enterpriseMetrics, orgMetrics);
     } catch (error) {
         console.error('Error fetching metrics:', error);
+        const mainElement = document.querySelector('main');
+        if (mainElement) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4';
+            errorDiv.textContent = `Error: ${error.message}`;
+            mainElement.appendChild(errorDiv);
+        }
     }
 }
 
-function displayMetrics(enterpriseMetrics, orgMetrics) {
-    const metricsContainer = document.getElementById('metrics-container');
-    if (!metricsContainer) {
-        const container = document.createElement('div');
-        container.id = 'metrics-container';
-        container.className = 'mt-8 grid grid-cols-1 md:grid-cols-2 gap-6';
-        document.querySelector('main').appendChild(container);
-    }
-
-    // Display enterprise metrics
-    if (enterpriseMetrics && enterpriseMetrics.length > 0) {
-        const latestMetrics = enterpriseMetrics[0];
-        displayMetricsSection('Enterprise Metrics', latestMetrics);
-    }
-
-    // Display org metrics
-    if (orgMetrics && orgMetrics.length > 0) {
-        const latestMetrics = orgMetrics[0];
-        displayMetricsSection('Organization Metrics', latestMetrics);
-    }
+function createMetricsContainer() {
+    const container = document.createElement('div');
+    container.id = 'metrics-container';
+    container.className = 'mt-8 space-y-8';
+    document.querySelector('main').appendChild(container);
+    return container;
 }
 
-function displayMetricsSection(title, metrics) {
-    const container = document.getElementById('metrics-container');
+function createSection(title, metricsData) {
     const section = document.createElement('div');
     section.className = 'bg-white p-6 rounded-lg shadow-lg';
     
+    const latestMetrics = metricsData[metricsData.length - 1];
+    
     section.innerHTML = `
-        <h2 class="text-2xl font-bold mb-4">${title}</h2>
-        <div class="space-y-6">
-            <div class="grid grid-cols-2 gap-4">
-                <div class="bg-gray-50 p-4 rounded">
-                    <h3 class="font-semibold">Active Users</h3>
-                    <p class="text-2xl">${metrics.total_active_users}</p>
-                </div>
-                <div class="bg-gray-50 p-4 rounded">
-                    <h3 class="font-semibold">Engaged Users</h3>
-                    <p class="text-2xl">${metrics.total_engaged_users}</p>
-                </div>
+        <h2 class="text-2xl font-bold mb-6">${title}</h2>
+        
+        <!-- Overview Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-blue-800">Active Users</h3>
+                <p class="text-3xl font-bold text-blue-600">${latestMetrics.total_active_users}</p>
             </div>
-            
-            ${createIDEMetricsHTML(metrics.copilot_ide_code_completions)}
-            ${createChatMetricsHTML(metrics.copilot_ide_chat, metrics.copilot_dotcom_chat)}
-            ${createPRMetricsHTML(metrics.copilot_dotcom_pull_requests)}
+            <div class="bg-green-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-green-800">Engaged Users</h3>
+                <p class="text-3xl font-bold text-green-600">${latestMetrics.total_engaged_users}</p>
+            </div>
+            <div class="bg-purple-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-purple-800">IDE Chat Users</h3>
+                <p class="text-3xl font-bold text-purple-600">${latestMetrics.copilot_ide_chat.total_engaged_users || 0}</p>
+            </div>
+        </div>
+
+        <!-- IDE Completions -->
+        <div class="mt-8">
+            <h3 class="text-xl font-semibold mb-4">IDE Completions by Editor</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                ${createEditorCards(latestMetrics.copilot_ide_code_completions?.editors || [])}
+            </div>
+        </div>
+
+        <!-- Language Stats -->
+        <div class="mt-8">
+            <h3 class="text-xl font-semibold mb-4">Language Usage</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                ${createLanguageCards(latestMetrics.copilot_ide_code_completions?.languages || [])}
+            </div>
+        </div>
+
+        <!-- Charts Container -->
+        <div class="mt-8">
+            <canvas id="${title.toLowerCase().replace(/\s+/g, '-')}-chart" class="w-full"></canvas>
         </div>
     `;
-    
-    container.appendChild(section);
+
+    return section;
 }
 
-function createIDEMetricsHTML(ideMetrics) {
-    if (!ideMetrics) return '';
-    
-    const languageStats = ideMetrics.languages.map(lang => `
-        <div class="bg-blue-50 p-3 rounded">
-            <h4 class="font-medium">${lang.name}</h4>
-            <p>${lang.total_engaged_users} users</p>
+function createEditorCards(editors) {
+    return editors.map(editor => `
+        <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="font-semibold text-gray-800">${editor.name}</h4>
+            <p class="text-2xl font-bold text-gray-600">${editor.total_engaged_users || 0} users</p>
+            ${createModelStats(editor.models)}
         </div>
     `).join('');
-
-    return `
-        <div class="mt-6">
-            <h3 class="text-xl font-semibold mb-3">IDE Completions</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                ${languageStats}
-            </div>
-        </div>
-    `;
 }
 
-function createChatMetricsHTML(ideChat, dotcomChat) {
-    if (!ideChat && !dotcomChat) return '';
+function createModelStats(models) {
+    if (!models || !models.length) return '';
     
-    return `
-        <div class="mt-6">
-            <h3 class="text-xl font-semibold mb-3">Chat Usage</h3>
-            <div class="grid grid-cols-2 gap-4">
-                <div class="bg-green-50 p-4 rounded">
-                    <h4 class="font-medium">IDE Chat</h4>
-                    <p>${ideChat?.total_engaged_users || 0} users</p>
-                </div>
-                <div class="bg-green-50 p-4 rounded">
-                    <h4 class="font-medium">GitHub.com Chat</h4>
-                    <p>${dotcomChat?.total_engaged_users || 0} users</p>
-                </div>
+    return models.map(model => {
+        const languages = model.languages || [];
+        const totalAcceptances = languages.reduce((sum, lang) => sum + (lang.total_code_acceptances || 0), 0);
+        const totalSuggestions = languages.reduce((sum, lang) => sum + (lang.total_code_suggestions || 0), 0);
+        
+        return `
+            <div class="mt-2 text-sm">
+                <p>Acceptances: ${totalAcceptances}</p>
+                <p>Suggestions: ${totalSuggestions}</p>
+                ${model.total_engaged_users ? `<p>Users: ${model.total_engaged_users}</p>` : ''}
             </div>
-        </div>
-    `;
+        `;
+    }).join('');
 }
 
-function createPRMetricsHTML(prMetrics) {
-    if (!prMetrics) return '';
-    
-    const repoStats = prMetrics.repositories.map(repo => `
-        <div class="bg-purple-50 p-3 rounded">
-            <h4 class="font-medium">${repo.name}</h4>
-            <p>${repo.total_engaged_users} users</p>
-            <p>${repo.models[0]?.total_pr_summaries_created || 0} PR summaries</p>
+function createLanguageCards(languages) {
+    return languages.map(lang => `
+        <div class="bg-indigo-50 p-3 rounded-lg">
+            <h4 class="font-medium text-indigo-800">${lang.name}</h4>
+            <p class="text-xl font-semibold text-indigo-600">${lang.total_engaged_users} users</p>
         </div>
     `).join('');
-
-    return `
-        <div class="mt-6">
-            <h3 class="text-xl font-semibold mb-3">Pull Request Activity</h3>
-            <div class="grid grid-cols-2 gap-3">
-                ${repoStats}
-            </div>
-        </div>
-    `;
 }
 
-async function initialize() {
-    const usageData = await fetchData('/api/enterprise/usage');
+function createCharts(enterpriseMetrics, orgMetrics) {
+    // Clear previous charts
+    const chartContainer = document.getElementById('usageChart');
+    chartContainer.innerHTML = '';
+    
+    // Create organization chart
+    createTimeSeriesChart('organization-metrics-chart', orgMetrics, 'Organization Usage Over Time');
+    
+    // Conditionally create enterprise chart
+    if (enterpriseMetrics) {
+        createTimeSeriesChart('enterprise-metrics-chart', enterpriseMetrics, 'Enterprise Usage Over Time');
+    }
+}
 
-    displayUsageInfo(usageData);
-    createUsageChart(usageData);
+function createTimeSeriesChart(canvasId, metricsData, title) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    const dates = metricsData.map(m => m.date);
+    const activeUsers = metricsData.map(m => m.total_active_users);
+    const engagedUsers = metricsData.map(m => m.total_engaged_users);
+    const chatUsers = metricsData.map(m => m.copilot_ide_chat.total_engaged_users || 0);
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [
+                {
+                    label: 'Active Users',
+                    data: activeUsers,
+                    borderColor: 'rgb(59, 130, 246)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Engaged Users',
+                    data: engagedUsers,
+                    borderColor: 'rgb(34, 197, 94)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Chat Users',
+                    data: chatUsers,
+                    borderColor: 'rgb(168, 85, 247)',
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: title
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function initialize() {
+    // Add event listener for the enterprise toggle
+    const toggle = document.getElementById('enterprise-toggle');
+    let isChecked = false;
+
+    toggle.addEventListener('click', () => {
+        isChecked = !isChecked;
+        toggle.setAttribute('aria-checked', isChecked);
+        
+        // Update toggle appearance
+        const toggleCircle = toggle.querySelector('span');
+        if (isChecked) {
+            toggle.classList.remove('bg-gray-200');
+            toggle.classList.add('bg-blue-600');
+            toggleCircle.classList.remove('translate-x-0');
+            toggleCircle.classList.add('translate-x-5');
+        } else {
+            toggle.classList.add('bg-gray-200');
+            toggle.classList.remove('bg-blue-600');
+            toggleCircle.classList.add('translate-x-0');
+            toggleCircle.classList.remove('translate-x-5');
+        }
+        
+        // Fetch new data
+        fetchMetrics();
+    });
+
+    // Initial fetch
     fetchMetrics();
 }
 
