@@ -182,7 +182,10 @@ function createSection(title, metricsData) {
     const section = document.createElement('div');
     section.className = 'bg-white p-6 rounded-lg shadow-lg';
     
-    const latestMetrics = metricsData[metricsData.length - 1];
+    // Calculate max values
+    const maxActiveUsers = Math.max(...metricsData.map(m => m.total_active_users));
+    const maxEngagedUsers = Math.max(...metricsData.map(m => m.total_engaged_users));
+    const maxChatUsers = Math.max(...metricsData.map(m => m.copilot_ide_chat.total_engaged_users || 0));
     
     section.innerHTML = `
         <h2 class="text-2xl font-bold mb-6">${title}</h2>
@@ -190,16 +193,16 @@ function createSection(title, metricsData) {
         <!-- Overview Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-blue-50 p-4 rounded-lg">
-                <h3 class="font-semibold text-blue-800">Active Users</h3>
-                <p class="text-3xl font-bold text-blue-600">${latestMetrics.total_active_users}</p>
+                <h3 class="font-semibold text-blue-800">Total active Users</h3>
+                <p class="text-3xl font-bold text-blue-600">${maxActiveUsers}</p>
             </div>
             <div class="bg-green-50 p-4 rounded-lg">
-                <h3 class="font-semibold text-green-800">Engaged Users</h3>
-                <p class="text-3xl font-bold text-green-600">${latestMetrics.total_engaged_users}</p>
+                <h3 class="font-semibold text-green-800">Total engaged Users</h3>
+                <p class="text-3xl font-bold text-green-600">${maxEngagedUsers}</p>
             </div>
             <div class="bg-purple-50 p-4 rounded-lg">
-                <h3 class="font-semibold text-purple-800">IDE Chat Users</h3>
-                <p class="text-3xl font-bold text-purple-600">${latestMetrics.copilot_ide_chat.total_engaged_users || 0}</p>
+                <h3 class="font-semibold text-purple-800">Total IDE Chat Users</h3>
+                <p class="text-3xl font-bold text-purple-600">${maxChatUsers}</p>
             </div>
         </div>
 
@@ -212,7 +215,7 @@ function createSection(title, metricsData) {
         <div class="mt-8">
             <h3 class="text-xl font-semibold mb-4">IDE Completions by Editor</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                ${createEditorCards(latestMetrics.copilot_ide_code_completions?.editors || [])}
+                ${createEditorCards(metricsData[metricsData.length - 1].copilot_ide_code_completions?.editors || [])}
             </div>
         </div>
 
@@ -220,7 +223,7 @@ function createSection(title, metricsData) {
         <div class="mt-8">
             <h3 class="text-xl font-semibold mb-4">Language Usage</h3>
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                ${createLanguageCards(latestMetrics.copilot_ide_code_completions?.languages || [])}
+                ${createLanguageCards(metricsData[metricsData.length - 1].copilot_ide_code_completions?.languages || [])}
             </div>
         </div>
     `;
@@ -351,7 +354,7 @@ function createTimeFrameSelector() {
                 <option value="letzte-woche">Letzte Woche</option>
                 <option value="letzte-7-tage">Letzte 7 Tage</option>
                 <option value="letzte-14-tage">Letzte 14 Tage</option>
-                <option value="letzte-28-tage">Letzte 28 Tage</option>
+                <option value="letzte-28-tage" selected>Letzte 28 Tage (Max.)</option>
                 <option value="benutzerdefiniert">Benutzerdefiniert</option>
             </select>
             <div id="custom-date-picker" class="hidden">
