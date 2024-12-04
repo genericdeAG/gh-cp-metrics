@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body class="bg-gray-100">
     <main class="container mx-auto px-4 py-8">
         <div class="flex justify-between items-center mb-8">
@@ -20,31 +22,35 @@
                 </div>
                 <label class="inline-flex items-center">
                     <span class="mr-3 text-sm font-medium text-gray-900">Show Enterprise Metrics</span>
-                    <button type="button" id="enterprise-toggle" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-not-allowed rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 bg-gray-200" role="switch" aria-checked="false" disabled title="Coming soon">
-                        <span class="translate-x-0 pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                    <button type="button" id="enterprise-toggle"
+                        class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-not-allowed rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 bg-gray-200"
+                        role="switch" aria-checked="false" disabled title="Coming soon">
+                        <span
+                            class="translate-x-0 pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
                     </button>
                 </label>
             </div>
         </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-white p-6 rounded-lg shadow-lg">
-                <h2 class="text-xl font-semibold mb-4">Usage Overview</h2>
-                <div id="usageInfo" class="space-y-4"></div>
+
+        <div class="bg-white rounded-lg shadow-lg">
+            <div class="border-b border-gray-200 px-6 py-4">
+                <h2 class="text-xl font-semibold text-gray-800">Usage Overview</h2>
             </div>
             
-            <div class="bg-white p-6 rounded-lg shadow-lg">
-                <h2 class="text-xl font-semibold mb-4">Seat Management</h2>
-                <div id="seatInfo" class="space-y-4"></div>
-            </div>
-        </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+                <div class="space-y-4" id="usageInfo">
+                    <!-- Usage info will be populated here -->
+                </div>
 
-        <div class="mt-8 bg-white p-6 rounded-lg shadow-lg">
-            <canvas id="usageChart"></canvas>
+                <div>
+                    <canvas id="usageChart"></canvas>
+                </div>
+            </div>
         </div>
     </main>
 
     <script src="js/app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.js"></script>
 </body>
+
 </html>

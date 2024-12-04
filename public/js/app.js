@@ -189,7 +189,7 @@ function createMetricsContainer() {
 
 function createSection(title, metricsData) {
     const section = document.createElement('div');
-    section.className = 'bg-white p-6 rounded-lg shadow-lg';
+    section.className = 'bg-white rounded-lg shadow-lg';
     
     // Calculate max values
     const maxActiveUsers = Math.max(...metricsData.map(m => m.total_active_users));
@@ -200,42 +200,52 @@ function createSection(title, metricsData) {
     const aggregatedEditors = aggregateEditorData(metricsData);
     
     section.innerHTML = `
-        <h2 class="text-2xl font-bold mb-6">${title}</h2>
+        <div class="border-b border-gray-200 px-6 py-4">
+            <h2 class="text-xl font-semibold text-gray-800">${title}</h2>
+        </div>
         
-        <!-- Overview Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="bg-blue-50 p-4 rounded-lg">
-                <h3 class="font-semibold text-blue-800">Total active Users</h3>
-                <p class="text-3xl font-bold text-blue-600">${maxActiveUsers}</p>
-            </div>
-            <div class="bg-green-50 p-4 rounded-lg">
-                <h3 class="font-semibold text-green-800">Total engaged Users</h3>
-                <p class="text-3xl font-bold text-green-600">${maxEngagedUsers}</p>
-            </div>
-            <div class="bg-purple-50 p-4 rounded-lg">
-                <h3 class="font-semibold text-purple-800">Total IDE Chat Users</h3>
-                <p class="text-3xl font-bold text-purple-600">${maxChatUsers}</p>
-            </div>
-        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+            <!-- Left Column: IDE Completions and Languages -->
+            <div class="space-y-6">
+                <!-- IDE Completions -->
+                <div class="bg-white p-4 rounded-lg border border-gray-100">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4">IDE Completions by Editor</h3>
+                    <div class="space-y-4">
+                        ${createEditorCards(aggregatedEditors)}
+                    </div>
+                </div>
 
-        <!-- Charts Container -->
-        <div class="mt-8">
-            <canvas id="${title.toLowerCase().replace(/\s+/g, '-')}-chart" class="w-full"></canvas>
-        </div>
-
-        <!-- IDE Completions -->
-        <div class="mt-8">
-            <h3 class="text-xl font-semibold mb-4">IDE Completions by Editor</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                ${createEditorCards(aggregatedEditors)}
+                <!-- Language Stats -->
+                <div class="bg-white p-4 rounded-lg border border-gray-100">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4">Languages Used</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        ${createLanguageCards(metricsData[metricsData.length - 1].copilot_ide_code_completions?.languages || [])}
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <!-- Language Stats -->
-        <div class="mt-8">
-            <h3 class="text-xl font-semibold mb-4">Language Usage</h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                ${createLanguageCards(metricsData[metricsData.length - 1].copilot_ide_code_completions?.languages || [])}
+            <!-- Right Column: Chart and User Numbers -->
+            <div class="space-y-6">
+                <!-- User Metrics Cards -->
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="text-sm font-medium text-blue-600">Active Users</p>
+                        <p class="text-2xl font-bold text-blue-700">${maxActiveUsers}</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <p class="text-sm font-medium text-green-600">Engaged Users</p>
+                        <p class="text-2xl font-bold text-green-700">${maxEngagedUsers}</p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <p class="text-sm font-medium text-purple-600">Chat Users</p>
+                        <p class="text-2xl font-bold text-purple-700">${maxChatUsers}</p>
+                    </div>
+                </div>
+
+                <!-- Chart -->
+                <div class="bg-white rounded-lg border border-gray-100">
+                    <canvas id="${title.toLowerCase().replace(/\s+/g, '-')}-chart"></canvas>
+                </div>
             </div>
         </div>
     `;
@@ -246,8 +256,10 @@ function createSection(title, metricsData) {
 function createEditorCards(editors) {
     return editors.map(editor => `
         <div class="bg-gray-50 p-4 rounded-lg">
-            <h4 class="font-semibold text-gray-800">${editor.name}</h4>
-            <p class="text-2xl font-bold text-gray-600">${editor.total_engaged_users || 0} users</p>
+            <div class="flex justify-between items-start">
+                <h4 class="font-semibold text-gray-800">${editor.name}</h4>
+                <span class="text-sm font-medium text-gray-600">${editor.total_engaged_users || 0} users</span>
+            </div>
             ${createModelStats(editor.models)}
         </div>
     `).join('');
@@ -272,12 +284,17 @@ function createModelStats(models) {
 }
 
 function createLanguageCards(languages) {
-    return languages.map(lang => `
-        <div class="bg-indigo-50 p-3 rounded-lg">
-            <h4 class="font-medium text-indigo-800">${lang.name}</h4>
-            <p class="text-xl font-semibold text-indigo-600">${lang.total_engaged_users} users</p>
-        </div>
-    `).join('');
+    return languages
+        .sort((a, b) => b.total_engaged_users - a.total_engaged_users)
+        .slice(0, 6)  // Show only top 6 languages
+        .map(lang => `
+            <div class="bg-indigo-50 p-3 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <h4 class="font-medium text-indigo-800">${lang.name}</h4>
+                    <span class="text-sm font-medium text-indigo-600">${lang.total_engaged_users}</span>
+                </div>
+            </div>
+        `).join('');
 }
 
 function createCharts(enterpriseMetrics, orgMetrics) {
