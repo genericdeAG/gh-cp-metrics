@@ -115,14 +115,17 @@ async function loadOrganizations() {
     }
 }
 
+let currentChart = null;
+
 async function fetchMetrics() {
     try {
         const dateRange = getDateRangeForTimeFrame();
         const since = dateRange.start.toISOString();
         const until = dateRange.end.toISOString();
         
-        // Always fetch org metrics
+        // Fetch org metrics and usage data
         const orgMetrics = await fetch(`/api/copilot/metrics/org?org=${selectedOrg}&since=${since}&until=${until}&per_page=28`).then(res => res.json());
+        const orgUsage = await fetch(`/api/org/usage/${selectedOrg}?since=${since}&until=${until}`).then(res => res.json());
         
         // Conditionally fetch enterprise metrics based on toggle state
         const showEnterprise = document.getElementById('enterprise-toggle').getAttribute('aria-checked') === 'true';
@@ -131,7 +134,11 @@ async function fetchMetrics() {
         if (showEnterprise) {
             enterpriseMetrics = await fetch(`/api/copilot/metrics/enterprise?since=${since}&until=${until}&per_page=28`).then(res => res.json());
         }
+
+        // Update usage info with suggestions and acceptances
+        updateUsageInfo(orgUsage);
         
+        // Create sections based on toggle state
         const mainElement = document.querySelector('main');
         if (!mainElement) {
             throw new Error('Main element not found in the document');
@@ -147,7 +154,6 @@ async function fetchMetrics() {
         }
         container.innerHTML = '';
         
-        // Create sections based on toggle state
         if (showEnterprise && enterpriseMetrics) {
             const enterpriseSection = createSection('Enterprise Metrics', enterpriseMetrics);
             container.appendChild(enterpriseSection);
@@ -156,15 +162,18 @@ async function fetchMetrics() {
         const orgSection = createSection('Organization Metrics', orgMetrics);
         container.appendChild(orgSection);
 
-        // Create charts
+        // Create the suggestions/acceptances chart
+        createSuggestionsChart(orgUsage);
+        
+        // Create the existing metrics charts
         createCharts(enterpriseMetrics, orgMetrics);
     } catch (error) {
         console.error('Error fetching metrics:', error);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4';
+        errorDiv.textContent = `Error: ${error.message}`;
         const mainElement = document.querySelector('main');
         if (mainElement) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4';
-            errorDiv.textContent = `Error: ${error.message}`;
             mainElement.appendChild(errorDiv);
         }
     }
@@ -478,61 +487,6 @@ function getDateRangeForTimeFrame() {
     return { start, end };
 }
 
-async function fetchMetrics() {
-    try {
-        const dateRange = getDateRangeForTimeFrame();
-        const since = dateRange.start.toISOString();
-        const until = dateRange.end.toISOString();
-        
-        // Always fetch org metrics
-        const orgMetrics = await fetch(`/api/copilot/metrics/org?org=${selectedOrg}&since=${since}&until=${until}&per_page=28`).then(res => res.json());
-        
-        // Conditionally fetch enterprise metrics based on toggle state
-        const showEnterprise = document.getElementById('enterprise-toggle').getAttribute('aria-checked') === 'true';
-        let enterpriseMetrics = null;
-        
-        if (showEnterprise) {
-            enterpriseMetrics = await fetch(`/api/copilot/metrics/enterprise?since=${since}&until=${until}&per_page=28`).then(res => res.json());
-        }
-        
-        const mainElement = document.querySelector('main');
-        if (!mainElement) {
-            throw new Error('Main element not found in the document');
-        }
-
-        // Clear previous metrics
-        let container = document.getElementById('metrics-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'metrics-container';
-            container.className = 'mt-8 space-y-8';
-            mainElement.appendChild(container);
-        }
-        container.innerHTML = '';
-        
-        // Create sections based on toggle state
-        if (showEnterprise && enterpriseMetrics) {
-            const enterpriseSection = createSection('Enterprise Metrics', enterpriseMetrics);
-            container.appendChild(enterpriseSection);
-        }
-        
-        const orgSection = createSection('Organization Metrics', orgMetrics);
-        container.appendChild(orgSection);
-
-        // Create charts
-        createCharts(enterpriseMetrics, orgMetrics);
-    } catch (error) {
-        console.error('Error fetching metrics:', error);
-        const mainElement = document.querySelector('main');
-        if (mainElement) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4';
-            errorDiv.textContent = `Error: ${error.message}`;
-            mainElement.appendChild(errorDiv);
-        }
-    }
-}
-
 function initialize() {
     // Add the time frame selector at the top of the page
     const mainElement = document.querySelector('main');
@@ -641,6 +595,164 @@ function aggregateEditorData(metricsData) {
             languages: Array.from(model.languages.values())
         }))
     }));
+}
+
+function updateUsageInfo(usageData) {
+    const usageInfo = document.getElementById('usageInfo');
+    if (!usageData || !Array.isArray(usageData)) {
+        usageInfo.innerHTML = '<p class="text-red-500">Error loading usage data</p>';
+        return;
+    }
+
+    // Aggregate data across all days
+    const aggregatedData = usageData.reduce((acc, day) => ({
+        totalSuggestions: acc.totalSuggestions + day.total_suggestions_count,
+        totalAcceptances: acc.totalAcceptances + day.total_acceptances_count,
+        totalLinesSuggested: acc.totalLinesSuggested + day.total_lines_suggested,
+        totalLinesAccepted: acc.totalLinesAccepted + day.total_lines_accepted
+    }), {
+        totalSuggestions: 0,
+        totalAcceptances: 0,
+        totalLinesSuggested: 0,
+        totalLinesAccepted: 0
+    });
+
+    const suggestionAcceptanceRate = aggregatedData.totalSuggestions > 0 
+        ? ((aggregatedData.totalAcceptances / aggregatedData.totalSuggestions) * 100).toFixed(1) 
+        : 0;
+
+    const lineAcceptanceRate = aggregatedData.totalLinesSuggested > 0
+        ? ((aggregatedData.totalLinesAccepted / aggregatedData.totalLinesSuggested) * 100).toFixed(1)
+        : 0;
+
+    usageInfo.innerHTML = `
+        <div class="space-y-6">
+            <!-- Suggestions Metrics -->
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Suggestions Metrics</h3>
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <p class="text-sm font-medium text-blue-600">Total Suggestions</p>
+                        <p class="text-2xl font-bold text-blue-700">${aggregatedData.totalSuggestions.toLocaleString()}</p>
+                    </div>
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <p class="text-sm font-medium text-blue-600">Total Acceptances</p>
+                        <p class="text-2xl font-bold text-blue-700">${aggregatedData.totalAcceptances.toLocaleString()}</p>
+                    </div>
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <p class="text-sm font-medium text-blue-600">Acceptance Rate</p>
+                        <p class="text-2xl font-bold text-blue-700">${suggestionAcceptanceRate}%</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lines Metrics -->
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Lines Metrics</h3>
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="p-4 bg-orange-50 rounded-lg">
+                        <p class="text-sm font-medium text-orange-600">Lines Suggested</p>
+                        <p class="text-2xl font-bold text-orange-700">${aggregatedData.totalLinesSuggested.toLocaleString()}</p>
+                    </div>
+                    <div class="p-4 bg-orange-50 rounded-lg">
+                        <p class="text-sm font-medium text-orange-600">Lines Accepted</p>
+                        <p class="text-2xl font-bold text-orange-700">${aggregatedData.totalLinesAccepted.toLocaleString()}</p>
+                    </div>
+                    <div class="p-4 bg-orange-50 rounded-lg">
+                        <p class="text-sm font-medium text-orange-600">Acceptance Rate</p>
+                        <p class="text-2xl font-bold text-orange-700">${lineAcceptanceRate}%</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function createSuggestionsChart(usageData) {
+    const canvas = document.getElementById('usageChart');
+    const ctx = canvas.getContext('2d');
+    
+    // Destroy existing chart if it exists
+    if (currentChart) {
+        currentChart.destroy();
+    }
+
+    if (!Array.isArray(usageData)) {
+        console.error('Usage data is not an array');
+        return;
+    }
+
+    // Prepare data for the chart
+    const labels = usageData.map(day => day.day);
+    const suggestions = usageData.map(day => day.total_suggestions_count);
+    const acceptances = usageData.map(day => day.total_acceptances_count);
+    const linesSuggested = usageData.map(day => day.total_lines_suggested);
+    const linesAccepted = usageData.map(day => day.total_lines_accepted);
+
+    currentChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Suggestions',
+                    data: suggestions,
+                    borderColor: '#93C5FD',
+                    backgroundColor: '#93C5FD20',
+                    fill: true
+                },
+                {
+                    label: 'Acceptances',
+                    data: acceptances,
+                    borderColor: '#1D4ED8',
+                    backgroundColor: '#1D4ED820',
+                    fill: true
+                },
+                {
+                    label: 'Lines Suggested',
+                    data: linesSuggested,
+                    borderColor: '#FCD34D',
+                    backgroundColor: '#FCD34D20',
+                    fill: true
+                },
+                {
+                    label: 'Lines Accepted',
+                    data: linesAccepted,
+                    borderColor: '#F97316',
+                    backgroundColor: '#F9731620',
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                title: {
+                    display: true,
+                    text: 'Copilot Usage Over Time'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Count'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                }
+            }
+        }
+    });
 }
 
 initialize();

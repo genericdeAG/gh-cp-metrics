@@ -38,10 +38,13 @@ app.get('/api/organizations', async (req, res) => {
     }
 });
 
-app.get('/api/org/usage', async (req, res) => {
+app.get('/api/org/usage/:org', async (req, res) => {
     try {
+        const { since, until } = req.query;
         const response = await octokit.request('GET /orgs/{org}/copilot/usage', {
-            org: process.env.ORG_NAME_2,
+            org: req.params.org,
+            since,
+            until,
             headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
             }
