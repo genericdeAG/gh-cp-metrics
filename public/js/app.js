@@ -199,6 +199,11 @@ function createSection(title, metricsData) {
             </div>
         </div>
 
+        <!-- Charts Container -->
+        <div class="mt-8">
+            <canvas id="${title.toLowerCase().replace(/\s+/g, '-')}-chart" class="w-full"></canvas>
+        </div>
+
         <!-- IDE Completions -->
         <div class="mt-8">
             <h3 class="text-xl font-semibold mb-4">IDE Completions by Editor</h3>
@@ -213,11 +218,6 @@ function createSection(title, metricsData) {
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 ${createLanguageCards(latestMetrics.copilot_ide_code_completions?.languages || [])}
             </div>
-        </div>
-
-        <!-- Charts Container -->
-        <div class="mt-8">
-            <canvas id="${title.toLowerCase().replace(/\s+/g, '-')}-chart" class="w-full"></canvas>
         </div>
     `;
 
