@@ -187,6 +187,9 @@ function createSection(title, metricsData) {
     const maxEngagedUsers = Math.max(...metricsData.map(m => m.total_engaged_users));
     const maxChatUsers = Math.max(...metricsData.map(m => m.copilot_ide_chat.total_engaged_users || 0));
     
+    // Aggregate IDE completion data across all days
+    const aggregatedEditors = aggregateEditorData(metricsData);
+    
     section.innerHTML = `
         <h2 class="text-2xl font-bold mb-6">${title}</h2>
         
@@ -215,7 +218,7 @@ function createSection(title, metricsData) {
         <div class="mt-8">
             <h3 class="text-xl font-semibold mb-4">IDE Completions by Editor</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                ${createEditorCards(metricsData[metricsData.length - 1].copilot_ide_code_completions?.editors || [])}
+                ${createEditorCards(aggregatedEditors)}
             </div>
         </div>
 
@@ -575,6 +578,69 @@ function initialize() {
 
     // Initial fetch
     fetchMetrics();
+}
+
+function aggregateEditorData(metricsData) {
+    const editorMap = new Map();
+
+    metricsData.forEach(dayData => {
+        const editors = dayData.copilot_ide_code_completions?.editors || [];
+        editors.forEach(editor => {
+            if (!editorMap.has(editor.name)) {
+                editorMap.set(editor.name, {
+                    name: editor.name,
+                    total_engaged_users: editor.total_engaged_users || 0,
+                    models: new Map()
+                });
+            }
+
+            const editorData = editorMap.get(editor.name);
+            editorData.total_engaged_users = Math.max(editorData.total_engaged_users, editor.total_engaged_users || 0);
+
+            (editor.models || []).forEach(model => {
+                if (!editorData.models.has(model.name)) {
+                    editorData.models.set(model.name, {
+                        name: model.name,
+                        total_engaged_users: 0,
+                        languages: new Map(),
+                        is_custom_model: model.is_custom_model
+                    });
+                }
+
+                const modelData = editorData.models.get(model.name);
+                modelData.total_engaged_users = Math.max(modelData.total_engaged_users, model.total_engaged_users || 0);
+
+                (model.languages || []).forEach(lang => {
+                    if (!modelData.languages.has(lang.name)) {
+                        modelData.languages.set(lang.name, {
+                            name: lang.name,
+                            total_engaged_users: 0,
+                            total_code_acceptances: 0,
+                            total_code_suggestions: 0,
+                            total_code_lines_accepted: 0,
+                            total_code_lines_suggested: 0
+                        });
+                    }
+
+                    const langData = modelData.languages.get(lang.name);
+                    langData.total_engaged_users = Math.max(langData.total_engaged_users, lang.total_engaged_users || 0);
+                    langData.total_code_acceptances += lang.total_code_acceptances || 0;
+                    langData.total_code_suggestions += lang.total_code_suggestions || 0;
+                    langData.total_code_lines_accepted += lang.total_code_lines_accepted || 0;
+                    langData.total_code_lines_suggested += lang.total_code_lines_suggested || 0;
+                });
+            });
+        });
+    });
+
+    // Convert the Map back to the original structure
+    return Array.from(editorMap.values()).map(editor => ({
+        ...editor,
+        models: Array.from(editor.models.values()).map(model => ({
+            ...model,
+            languages: Array.from(model.languages.values())
+        }))
+    }));
 }
 
 initialize();
