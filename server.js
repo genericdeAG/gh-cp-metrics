@@ -77,12 +77,17 @@ app.get('/api/enterprise/usage', async (req, res) => {
 app.get('/api/copilot/metrics/enterprise', async (req, res) => {
     try {
         console.log(`Fetching metrics for enterprise: ${process.env.ENTERPRISE_NAME}`);
+        const { since, until, page = 1, per_page = 28 } = req.query;
 
         const response = await octokit.request('GET /enterprises/{enterprise}/copilot/metrics', {
             enterprise: process.env.ENTERPRISE_NAME,
             headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
-            }
+            },
+            ...(since && { since }),
+            ...(until && { until }),
+            page: parseInt(page),
+            per_page: parseInt(per_page)
         });
         
         res.json(response.data);
@@ -102,14 +107,19 @@ app.get('/api/copilot/metrics/enterprise', async (req, res) => {
 
 app.get('/api/copilot/metrics/org', async (req, res) => {
     try {
-        const selectedOrg = req.query.org || process.env.ORG_NAME_1; // Use query param or fallback to default
+        const selectedOrg = req.query.org || process.env.ORG_NAME_1;
+        const { since, until, page = 1, per_page = 28 } = req.query;
         console.log(`Fetching metrics for organization: ${selectedOrg}`);
 
         const response = await octokit.request('GET /orgs/{org}/copilot/metrics', {
             org: selectedOrg,
             headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
-            }
+            },
+            ...(since && { since }),
+            ...(until && { until }),
+            page: parseInt(page),
+            per_page: parseInt(per_page)
         });
         
         res.json(response.data);

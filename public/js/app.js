@@ -117,15 +117,19 @@ async function loadOrganizations() {
 
 async function fetchMetrics() {
     try {
+        const dateRange = getDateRangeForTimeFrame();
+        const since = dateRange.start.toISOString();
+        const until = dateRange.end.toISOString();
+        
         // Always fetch org metrics
-        const orgMetrics = await fetch(`/api/copilot/metrics/org?org=${selectedOrg}`).then(res => res.json());
+        const orgMetrics = await fetch(`/api/copilot/metrics/org?org=${selectedOrg}&since=${since}&until=${until}&per_page=28`).then(res => res.json());
         
         // Conditionally fetch enterprise metrics based on toggle state
         const showEnterprise = document.getElementById('enterprise-toggle').getAttribute('aria-checked') === 'true';
         let enterpriseMetrics = null;
         
         if (showEnterprise) {
-            enterpriseMetrics = await fetch(`/api/copilot/metrics/enterprise`).then(res => res.json());
+            enterpriseMetrics = await fetch(`/api/copilot/metrics/enterprise?since=${since}&until=${until}&per_page=28`).then(res => res.json());
         }
         
         const mainElement = document.querySelector('main');
@@ -332,11 +336,209 @@ function createTimeSeriesChart(canvasId, metricsData, title) {
     });
 }
 
+let selectedTimeFrame = 'letzte-30-tage';
+let customStartDate = null;
+let customEndDate = null;
+
+function createTimeFrameSelector() {
+    const container = document.createElement('div');
+    container.className = 'mb-4';
+    container.innerHTML = `
+        <div class="flex flex-col mr-4">
+            <select id="timeframe-selector" class="form-select rounded-lg border-gray-300">
+                <option value="gestern">Gestern</option>
+                <option value="diese-woche">Diese Woche</option>
+                <option value="letzte-woche">Letzte Woche</option>
+                <option value="letzte-7-tage">Letzte 7 Tage</option>
+                <option value="letzte-14-tage">Letzte 14 Tage</option>
+                <option value="letzte-28-tage">Letzte 28 Tage</option>
+                <option value="benutzerdefiniert">Benutzerdefiniert</option>
+            </select>
+            <div id="custom-date-picker" class="hidden">
+                <div class="flex space-x-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Startdatum</label>
+                        <input type="date" id="start-date" class="mt-1 form-input rounded-md border-gray-300">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Enddatum</label>
+                        <input type="date" id="end-date" class="mt-1 form-input rounded-md border-gray-300">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add event listeners
+    container.querySelector('#timeframe-selector').addEventListener('change', handleTimeFrameChange);
+    container.querySelector('#start-date').addEventListener('change', handleCustomDateChange);
+    container.querySelector('#end-date').addEventListener('change', handleCustomDateChange);
+
+    return container;
+}
+
+function handleTimeFrameChange(event) {
+    selectedTimeFrame = event.target.value;
+    const customDatePicker = document.getElementById('custom-date-picker');
+    
+    if (selectedTimeFrame === 'benutzerdefiniert') {
+        customDatePicker.classList.remove('hidden');
+    } else {
+        customDatePicker.classList.add('hidden');
+        fetchMetrics();
+    }
+}
+
+function handleCustomDateChange() {
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    
+    if (startDate && endDate) {
+        customStartDate = startDate;
+        customEndDate = endDate;
+        fetchMetrics();
+    }
+}
+
+function getDateRangeForTimeFrame() {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Calculate the earliest allowed date (28 days ago from now)
+    const minDate = new Date(now);
+    minDate.setDate(now.getDate() - 27);
+    
+    let start, end = now;
+    
+    switch (selectedTimeFrame) {
+        case 'gestern':
+            start = new Date(today);
+            start.setDate(today.getDate() - 1);
+            end = today;
+            break;
+        case 'diese-woche':
+            start = new Date(today);
+            // Convert Sunday (0) to 7, otherwise subtract 1 to make Monday (1) the start
+            const dayOfWeek = today.getDay() || 7;
+            start.setDate(today.getDate() - (dayOfWeek - 1));
+            start = start < minDate ? minDate : start;
+            break;
+        case 'letzte-woche':
+            start = new Date(today);
+            const lastWeekDay = today.getDay() || 7;
+            start.setDate(today.getDate() - (lastWeekDay - 1) - 7); // Go back 7 more days for last week
+            end = new Date(today);
+            end.setDate(today.getDate() - (lastWeekDay));
+            start = start < minDate ? minDate : start;
+            break;
+        case 'letzte-7-tage':
+            start = new Date(today);
+            start.setDate(today.getDate() - 7);
+            start = start < minDate ? minDate : start;
+            break;
+        case 'letzte-14-tage':
+            start = new Date(today);
+            start.setDate(today.getDate() - 14);
+            start = start < minDate ? minDate : start;
+            break;
+        case 'letzte-28-tage':
+            start = minDate;
+            break;
+        case 'benutzerdefiniert':
+            if (customStartDate && customEndDate) {
+                start = new Date(customStartDate);
+                end = new Date(customEndDate);
+                
+                // Ensure start date isn't more than 28 days ago
+                start = start < minDate ? minDate : start;
+                
+                // Ensure end date isn't before start date
+                if (end < start) {
+                    end = now;
+                }
+            } else {
+                start = minDate;
+            }
+            break;
+        default:
+            start = minDate;
+    }
+    
+    // Set the time of the dates to match the current time
+    // This ensures we get the most recent data possible
+    start.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+    end.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+    
+    return { start, end };
+}
+
+async function fetchMetrics() {
+    try {
+        const dateRange = getDateRangeForTimeFrame();
+        const since = dateRange.start.toISOString();
+        const until = dateRange.end.toISOString();
+        
+        // Always fetch org metrics
+        const orgMetrics = await fetch(`/api/copilot/metrics/org?org=${selectedOrg}&since=${since}&until=${until}&per_page=28`).then(res => res.json());
+        
+        // Conditionally fetch enterprise metrics based on toggle state
+        const showEnterprise = document.getElementById('enterprise-toggle').getAttribute('aria-checked') === 'true';
+        let enterpriseMetrics = null;
+        
+        if (showEnterprise) {
+            enterpriseMetrics = await fetch(`/api/copilot/metrics/enterprise?since=${since}&until=${until}&per_page=28`).then(res => res.json());
+        }
+        
+        const mainElement = document.querySelector('main');
+        if (!mainElement) {
+            throw new Error('Main element not found in the document');
+        }
+
+        // Clear previous metrics
+        let container = document.getElementById('metrics-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'metrics-container';
+            container.className = 'mt-8 space-y-8';
+            mainElement.appendChild(container);
+        }
+        container.innerHTML = '';
+        
+        // Create sections based on toggle state
+        if (showEnterprise && enterpriseMetrics) {
+            const enterpriseSection = createSection('Enterprise Metrics', enterpriseMetrics);
+            container.appendChild(enterpriseSection);
+        }
+        
+        const orgSection = createSection('Organization Metrics', orgMetrics);
+        container.appendChild(orgSection);
+
+        // Create charts
+        createCharts(enterpriseMetrics, orgMetrics);
+    } catch (error) {
+        console.error('Error fetching metrics:', error);
+        const mainElement = document.querySelector('main');
+        if (mainElement) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4';
+            errorDiv.textContent = `Error: ${error.message}`;
+            mainElement.appendChild(errorDiv);
+        }
+    }
+}
+
 function initialize() {
+    // Add the time frame selector at the top of the page
+    const mainElement = document.querySelector('main');
+    const orgSelector = document.getElementById('org-selector');
+    if (mainElement && orgSelector) {
+        const timeFrameSelector = createTimeFrameSelector();
+        orgSelector.parentNode.insertBefore(timeFrameSelector, orgSelector);
+    }
+    
     loadOrganizations();
     
     // Add event listener for organization selection
-    const orgSelector = document.getElementById('org-selector');
     orgSelector.addEventListener('change', (e) => {
         selectedOrg = e.target.value;
         fetchMetrics();
