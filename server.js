@@ -110,8 +110,17 @@ app.get('/api/copilot/metrics/enterprise', async (req, res) => {
 
 app.get('/api/copilot/metrics/org', async (req, res) => {
     try {
-        const selectedOrg = req.query.org || process.env.ORG_NAME_1;
         const { since, until, page = 1, per_page = 28 } = req.query;
+        
+        // Fetch organizations
+        const orgResponse = await octokit.request('GET /user/orgs', {
+            headers: {
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+
+        // Use the first organization as default if none is specified
+        const selectedOrg = req.query.org || orgResponse.data[0]?.login;
         console.log(`Fetching metrics for organization: ${selectedOrg}`);
 
         const response = await octokit.request('GET /orgs/{org}/copilot/metrics', {
@@ -127,7 +136,7 @@ app.get('/api/copilot/metrics/org', async (req, res) => {
         
         res.json(response.data);
     } catch (error) {
-        // console.error('Organization Metrics Error:', error);
+        console.error('Organization Metrics Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
