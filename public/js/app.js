@@ -198,6 +198,23 @@ function createSection(title, metricsData) {
     
     // Aggregate IDE completion data across all days
     const aggregatedEditors = aggregateEditorData(metricsData);
+    // Aggregate languages data across all days
+    const aggregatedLanguages = metricsData.reduce((acc, day) => {
+        const languages = day.copilot_ide_code_completions?.languages || [];
+        languages.forEach(lang => {
+            if (!acc.has(lang.name)) {
+                acc.set(lang.name, {
+                    name: lang.name,
+                    total_engaged_users: 0
+                });
+            }
+
+            const langData = acc.get(lang.name);
+            langData.total_engaged_users += lang.total_engaged_users || 0;
+        });
+
+        return acc;
+    }, new Map());
     
     section.innerHTML = `
         <div class="border-b border-gray-200 px-6 py-4">
@@ -219,7 +236,7 @@ function createSection(title, metricsData) {
                 <div class="bg-white p-4 rounded-lg border border-gray-100">
                     <h3 class="text-lg font-semibold text-gray-700 mb-4">Languages Used</h3>
                     <div class="grid grid-cols-2 gap-3">
-                        ${createLanguageCards(metricsData[metricsData.length - 1].copilot_ide_code_completions?.languages || [])}
+                        ${createLanguageCards(Array.from(aggregatedLanguages.values()))}
                     </div>
                 </div>
             </div>
