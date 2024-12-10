@@ -195,7 +195,7 @@ function createSection(title, metricsData) {
     const maxActiveUsers = Math.max(...metricsData.map(m => m.total_active_users));
     const maxEngagedUsers = Math.max(...metricsData.map(m => m.total_engaged_users));
     const maxChatUsers = Math.max(...metricsData.map(m => m.copilot_ide_chat.total_engaged_users || 0));
-    
+
     // Aggregate IDE completion data across all days
     const aggregatedEditors = aggregateEditorData(metricsData);
     // Aggregate languages data across all days
@@ -205,12 +205,12 @@ function createSection(title, metricsData) {
             if (!acc.has(lang.name)) {
                 acc.set(lang.name, {
                     name: lang.name,
-                    total_engaged_users: 0
+                    max_engaged_users: lang.total_engaged_users || 0
                 });
+            } else {
+                const langData = acc.get(lang.name);
+                langData.max_engaged_users = Math.max(langData.max_engaged_users, lang.total_engaged_users || 0);
             }
-
-            const langData = acc.get(lang.name);
-            langData.total_engaged_users += lang.total_engaged_users || 0;
         });
 
         return acc;
@@ -302,13 +302,13 @@ function createModelStats(models) {
 
 function createLanguageCards(languages) {
     return languages
-        .sort((a, b) => b.total_engaged_users - a.total_engaged_users)
-        .slice(0, 6)  // Show only top 6 languages
+        .sort((a, b) => b.max_engaged_users - a.max_engaged_users)
+        .slice(0, 6)
         .map(lang => `
             <div class="bg-indigo-50 p-3 rounded-lg">
                 <div class="flex justify-between items-center">
                     <h4 class="font-medium text-indigo-800">${lang.name}</h4>
-                    <span class="text-sm font-medium text-indigo-600">${lang.total_engaged_users}</span>
+                    <span class="text-sm font-medium text-indigo-600">${lang.max_engaged_users}</span>
                 </div>
             </div>
         `).join('');
